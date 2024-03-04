@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">Fiyat ve Stok Takip</string>
+    <string name="kaydol">Kaydol</string>
+    <string name="kay_tl_bir_hesab_n_yoksa_bu_sayfadan_kaydolabilirsin">Kayıtlı bir hesabın yoksa bu sayfadan kaydolabilirsin</string>
+    <string name="google_ile_kaydol">Google ile kaydol</string>
+    <string name="ya_da">ya da</string>
+    <string name="e_posta">E-posta</string>
+    <string name="ifre">Şifre</string>
+    <string name="hesab_n_var_m">Hesabın var mı?</string>
+    <string name="giri_yap">Giriş Yap</string>
+    <string name="kay_tl_bir_hesab_n_varsa_bu_sayfadan_giri_yapabilirsin">Kayıtlı bir hesabın varsa bu sayfadan giriş yapabilirsin</string>
+    <string name="google_ile_giri_yap">Google ile giriş yap</string>
+    <string name="ifreni_mi_unuttun">Şifreni mi unuttun?</string>
+    <string name="hesab_n_yok_mu">Hesabın yok mu?</string>
+    <string name="r_n_ekle">Ürün Ekle</string>
+    <string name="r_n_ad">Ürün Adı</string>
+    <string name="r_n_fiyat">Ürün Fiyatı</string>
+    <string name="r_n_a_klama">Ürün Açıklama</string>
+    <string name="stok_adedi">Stok Adedi</string>
+    <string name="r_n_resmi_ekle">Ürün Resmi Ekle</string>
+    <string name="r_n_al_fiyat">Ürün Alış Fiyatı</string>
+    <string name="r_n_sat_fiyat">Ürün Satış Fiyatı</string>
+    <string name="r_n_ara">Ürün ara...</string>
+    <string name="r_n_d_zenle">Ürün Düzenle</string>
+    <string name="kaydet">Kaydet</string>
+    <string name="r_n_resmi_de_i_tir">Ürün Resmi Değiştir</string>
+    <string name="r_n_sil">Ürünü Sil</string>
+    <string name="sat_c_ad">Satıcı Adı</string>
+    <string name="sat_c_telefon">Satıcı Telefon</string>
+    <string name="al_fiyat_g_ster">Alış Fiyatı: Göster</string>
+    <string name="r_n_barkodu">Ürün Barkodu</string>
+</resources>
