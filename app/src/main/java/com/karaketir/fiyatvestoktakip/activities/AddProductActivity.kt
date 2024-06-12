@@ -8,12 +8,16 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -34,8 +38,6 @@ class AddProductActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
     private lateinit var binding: ActivityAddProductBinding
-    private val cameraPermissionCode = 100
-    private val storagePermissionCode = 101
     private lateinit var productName: String
     private lateinit var productGetPrice: String
     private lateinit var productSellPrice: String
@@ -58,7 +60,7 @@ class AddProductActivity : AppCompatActivity() {
     private lateinit var productSellerNameEditText: EditText
     private lateinit var productSellerNumberEditText: EditText
     private lateinit var productBarcodeEditText: EditText
-
+    private lateinit var uploadProgressBar: ProgressBar
 
     private val storage = FirebaseStorage.getInstance()
     private val storageRef: StorageReference = storage.reference
@@ -67,17 +69,33 @@ class AddProductActivity : AppCompatActivity() {
     private val requestImagePick = 2
     private var imageBitmap: Bitmap? = null
 
+    private val requestCameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            checkAndRequestPermissions()
+        } else {
+            Toast.makeText(this, "Kamera izni verilmedi", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val requestStoragePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            openImageSourceDialog()
+        } else {
+            Toast.makeText(this, "Depolama izni verilmedi", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityAddProductBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-
         auth = Firebase.auth
         db = Firebase.firestore
-
-
 
         productNameEditText = binding.productNameEditText
         productSellPriceEditText = binding.productSellPriceEditText
@@ -90,137 +108,87 @@ class AddProductActivity : AppCompatActivity() {
         productSellerNameEditText = binding.productSellerNameEditText
         productSellerNumberEditText = binding.productSellerNumberEditText
         productBarcodeEditText = binding.productBarcodeEditText
+        uploadProgressBar = binding.uploadProgressBar
 
         addProductImageButton.setOnClickListener {
             checkAndRequestPermissions()
-            openImageSourceDialog()
-
         }
-
 
         addProductButton.setOnClickListener {
             addProductButton.isClickable = false
-
-
-            documentID = UUID.randomUUID().toString()
-            productName = productNameEditText.text.toString()
-            productGetPrice = productGetPriceEditText.text.toString()
-            productSellPrice = productSellPriceEditText.text.toString()
-            productStock = productStockEditText.text.toString()
-            productDescription = productDescriptionEditText.text.toString()
-            productSellerName = productSellerNameEditText.text.toString()
-            productSellerNumber = productSellerNumberEditText.text.toString()
-            productBarcode = productBarcodeEditText.text.toString()
-            productImageLink = ""
-
-            if (productGetPrice.isEmpty()) {
-                productGetPrice = "0"
-            }
-            if (productSellPrice.isEmpty()) {
-                productSellPrice = "0"
-            }
-            if (productStock.isEmpty()) {
-                productStock = "0"
-            }
-            if (productDescription.isEmpty()) {
-                productDescription = ""
-            }
-            if (productSellerName.isEmpty()) {
-                productSellerName = ""
-            }
-            if (productSellerNumber.isEmpty()) {
-                productSellerNumber = ""
-            }
-            if (productBarcode.isEmpty()) {
-                productBarcode = "0"
-            }
-
-            if (productName.isNotEmpty()) {
-
-                if (imageBitmap == null) {
-
-                    saveProduct()
-
-                } else {
-                    val fileName = "${documentID}.jpg"
-
-                    val imageRef = storageRef.child(fileName)
-                    val baos = ByteArrayOutputStream()
-                    imageBitmap!!.compress(Bitmap.CompressFormat.JPEG, 100, baos)
-                    val data = baos.toByteArray()
-
-                    // Upload the image to Firebase Storage
-                    val uploadTask = imageRef.putBytes(data)
-
-                    uploadTask.addOnSuccessListener {
-                        imageRef.downloadUrl.addOnSuccessListener { uri ->
-                            productImageLink = uri.toString()
-                            saveProduct()
-
-
-                        }.addOnFailureListener {
-
-                            Toast.makeText(this, "Başarısız", Toast.LENGTH_SHORT).show()
-
-                        }
-                    }.addOnFailureListener {
-                        // Handle unsuccessful uploads
-                        Toast.makeText(this, "Başarısız", Toast.LENGTH_SHORT).show()
-                    }
-                }
-
-            } else {
-                productNameEditText.error = "Bu Alan Boş Bırakılamaz"
-                addProductButton.isClickable = true
-            }
+            handleAddProduct()
         }
-
     }
 
     private fun checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.CAMERA
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.CAMERA), cameraPermissionCode
-            )
-        }
-
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.WRITE_EXTERNAL_STORAGE
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                ), storagePermissionCode
-            )
+        when {
+            !hasCameraPermission() -> requestCameraPermission()
+            !hasStoragePermission() -> requestStoragePermission()
+            else -> openImageSourceDialog()
         }
     }
 
+    private fun hasCameraPermission() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.CAMERA
+    ) == PackageManager.PERMISSION_GRANTED
 
-    // Handle permission request results
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            cameraPermissionCode, storagePermissionCode -> {
-
-            }
+    private fun hasStoragePermission() =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
         }
+
+    private fun requestCameraPermission() {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
+            showPermissionExplanationDialog(
+                "Kamera izni gerekli",
+                "Kamera izni, ürün fotoğrafı çekmek için gereklidir. Lütfen izni verin."
+            ) {
+                requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        } else {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun requestStoragePermission() {
+        val storagePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        }
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, storagePermission)) {
+            showPermissionExplanationDialog(
+                "Depolama izni gerekli",
+                "Depolama izni, galeriden görsel seçmek için gereklidir. Lütfen izni verin."
+            ) {
+                requestStoragePermissionLauncher.launch(storagePermission)
+            }
+        } else {
+            requestStoragePermissionLauncher.launch(storagePermission)
+        }
+    }
+
+    private fun showPermissionExplanationDialog(
+        title: String, message: String, onPositiveButtonClick: () -> Unit
+    ) {
+        AlertDialog.Builder(this).setTitle(title).setMessage(message)
+            .setPositiveButton("Tamam") { _, _ -> onPositiveButtonClick() }
+            .setNegativeButton("İptal", null).show()
     }
 
     private fun openImageSourceDialog() {
         val dialogBuilder = AlertDialog.Builder(this)
         dialogBuilder.setTitle("Görsel Kaynağını Seçin")
-            .setMessage("Görselin nereden alınacağını seçin:").setPositiveButton("Kamera") { _, _ ->
-                dispatchTakePictureIntent()
-            }.setNegativeButton("Galeri") { _, _ ->
-                openGallery()
-            }.setCancelable(true).show()
+            .setMessage("Görselin nereden alınacağını seçin:")
+            .setPositiveButton("Kamera") { _, _ -> dispatchTakePictureIntent() }
+            .setNegativeButton("Galeri") { _, _ -> openGallery() }.setCancelable(true).show()
     }
 
     private fun dispatchTakePictureIntent() {
@@ -231,9 +199,7 @@ class AddProductActivity : AppCompatActivity() {
     }
 
     private fun openGallery() {
-        val galleryIntent = Intent(
-            Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        )
+        val galleryIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         startActivityForResult(galleryIntent, requestImagePick)
     }
 
@@ -245,6 +211,7 @@ class AddProductActivity : AppCompatActivity() {
                 requestImageCapture -> {
                     imageBitmap = data?.extras?.get("data") as Bitmap
                     productImageView.setImageBitmap(imageBitmap)
+                    productImageView.visibility = View.VISIBLE
 
                 }
 
@@ -253,11 +220,76 @@ class AddProductActivity : AppCompatActivity() {
                     imageBitmap =
                         MediaStore.Images.Media.getBitmap(this.contentResolver, selectedImageUri)
                     productImageView.setImageBitmap(imageBitmap)
+                    productImageView.visibility = View.VISIBLE
 
                 }
             }
         }
     }
+
+    private fun handleAddProduct() {
+        documentID = UUID.randomUUID().toString()
+        productName = productNameEditText.text.toString()
+        productGetPrice = productGetPriceEditText.text.toString().ifEmpty { "0" }
+        productSellPrice = productSellPriceEditText.text.toString().ifEmpty { "0" }
+        productStock = productStockEditText.text.toString().ifEmpty { "0" }
+        productDescription = productDescriptionEditText.text.toString().ifEmpty { "" }
+        productSellerName = productSellerNameEditText.text.toString().ifEmpty { "" }
+        productSellerNumber = productSellerNumberEditText.text.toString().ifEmpty { "" }
+        productBarcode = productBarcodeEditText.text.toString().ifEmpty { "0" }
+        productImageLink = ""
+
+        if (productName.isNotEmpty()) {
+            uploadProductImage()
+        } else {
+            productNameEditText.error = "Bu Alan Boş Bırakılamaz"
+            addProductButton.isClickable = true
+        }
+    }
+
+    private fun uploadProductImage() {
+
+        productImageView.visibility = View.GONE
+
+        if (imageBitmap == null) {
+            saveProduct()
+        } else {
+            val fileName = "$documentID.jpg"
+            val imageRef = storageRef.child(fileName)
+            val baos = ByteArrayOutputStream()
+            imageBitmap!!.compress(Bitmap.CompressFormat.JPEG, 100, baos)
+            val data = baos.toByteArray()
+
+            // Show the ProgressBar
+            uploadProgressBar.visibility = View.VISIBLE
+
+            val uploadTask = imageRef.putBytes(data)
+            uploadTask.addOnSuccessListener {
+                imageRef.downloadUrl.addOnSuccessListener { uri ->
+                    productImageLink = uri.toString()
+                    saveProduct()
+                    // Hide the ProgressBar
+                    uploadProgressBar.visibility = View.GONE
+                }.addOnFailureListener {
+                    showToast("Görsel yükleme başarısız")
+                    addProductButton.isClickable = true
+                    // Hide the ProgressBar
+                    uploadProgressBar.visibility = View.GONE
+                }
+            }.addOnFailureListener {
+                showToast("Görsel yükleme başarısız")
+                addProductButton.isClickable = true
+                // Hide the ProgressBar
+                uploadProgressBar.visibility = View.GONE
+            }
+
+            uploadTask.addOnProgressListener { taskSnapshot ->
+                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                uploadProgressBar.progress = progress.toInt()
+            }
+        }
+    }
+
 
     private fun saveProduct() {
         val cal = Calendar.getInstance()
@@ -277,26 +309,31 @@ class AddProductActivity : AppCompatActivity() {
 
         db.collection("users").document(auth.uid!!).collection("products").document(documentID)
             .set(product).addOnSuccessListener {
-
-                Toast.makeText(this, "Başarılı!", Toast.LENGTH_SHORT).show()
+                showToast("Başarılı!")
+                resetFields()
                 addProductButton.isClickable = true
-
-                productNameEditText.setText("")
-                productSellPriceEditText.setText("")
-                productGetPriceEditText.setText("")
-                productStockEditText.setText("")
-                productDescriptionEditText.setText("")
-                productImageView.setImageResource(0)
-                productSellerNameEditText.setText("")
-                productSellerNumberEditText.setText("")
-                productBarcodeEditText.setText("")
-                documentID = UUID.randomUUID().toString()
-
             }.addOnFailureListener {
-                Toast.makeText(this, "Başarısız", Toast.LENGTH_SHORT).show()
+                showToast("Ürün kaydedilemedi")
                 addProductButton.isClickable = true
-
             }
+    }
 
+    private fun resetFields() {
+        productNameEditText.setText("")
+        productSellPriceEditText.setText("")
+        productGetPriceEditText.setText("")
+        productStockEditText.setText("")
+        productDescriptionEditText.setText("")
+        productImageView.setImageResource(0)
+        productSellerNameEditText.setText("")
+        productSellerNumberEditText.setText("")
+        productBarcodeEditText.setText("")
+        documentID = UUID.randomUUID().toString()
+        productImageLink = ""
+        productImageView.visibility = View.GONE
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 }

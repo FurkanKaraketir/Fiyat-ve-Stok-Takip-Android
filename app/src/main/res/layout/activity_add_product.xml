@@ -142,8 +142,17 @@
             android:layout_width="100dp"
             android:layout_height="100dp"
             android:layout_gravity="center_horizontal"
-            android:layout_margin="15dp"
-            android:contentDescription="@string/kaydol" />
+            android:layout_margin="10dp"
+            android:contentDescription="@string/kaydol"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/uploadProgressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="10dp"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/addProductImageButton"
